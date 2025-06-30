@@ -174,7 +174,12 @@ def rollout(
         # VectorEnv stores is_success in `info["final_info"][env_index]["is_success"]`. "final_info" isn't
         # available of none of the envs finished.
         if "final_info" in info:
-            successes = [info["is_success"] if info is not None else False for info in info["final_info"]]
+            # TODO(branyang02): Temporary fix for robosuite environments.
+            # successes = [info["is_success"] if info is not None else False for info in info["final_info"]]
+            successes = [
+                fi.get("is_success", False) if isinstance(fi, dict) else False
+                for fi in info.get("final_info", [])
+            ]
         else:
             successes = [False] * env.num_envs
 
