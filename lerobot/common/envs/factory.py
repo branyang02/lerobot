@@ -16,8 +16,17 @@
 import importlib
 
 import gymnasium as gym
+import robosuite as suite
 
-from lerobot.common.envs.configs import AlohaEnv, EnvConfig, HILEnvConfig, PushtEnv, XarmEnv
+from lerobot.common.envs.configs import (
+    AlohaEnv,
+    EnvConfig,
+    HILEnvConfig,
+    PushtEnv,
+    RobosuiteEnvConfig,
+    XarmEnv,
+)
+from lerobot.common.envs.utils import GymWrapper
 
 
 def make_env_config(env_type: str, **kwargs) -> EnvConfig:
@@ -51,6 +60,40 @@ def make_env(cfg: EnvConfig, n_envs: int = 1, use_async_envs: bool = False) -> g
     """
     if n_envs < 1:
         raise ValueError("`n_envs must be at least 1")
+
+    # TODO(branyang02): use config to init robosuite env
+    if isinstance(cfg, RobosuiteEnvConfig):
+        single_env = GymWrapper(
+            suite.make(
+                env_name="Stack",  # try with other tasks like "Stack" and "Door"
+                robots="Panda",  # try with other robots like "Sawyer" and "Jaco"
+                has_renderer=False,
+                has_offscreen_renderer=True,
+                control_freq=20,  # 20 hz control for applied actions
+                horizon=200,  # each episode terminates after 200 steps
+                use_camera_obs=True,  # use camera observations
+                camera_names=[
+                    "agentview",
+                    "robot0_eye_in_hand",
+                ],  # ['frontview', 'birdview', 'agentview', 'sideview', 'robot0_robotview', 'robot0_eye_in_hand'],             # 'frontview', 'birdview', 'agentview', 'sideview', 'robot0_robotview', 'robot0_eye_in_hand'
+                camera_heights=84,  # height of the camera images
+                camera_widths=84,  # width of the camera images
+                use_object_obs=False,  # use object observations
+            ),
+            keys=[
+                "agentview_image",
+                "robot0_eye_in_hand_image",
+                "robot0_eef_pos",
+                "robot0_eef_quat",
+                "robot0_gripper_qpos",
+            ],
+            flatten_obs=False,
+        )
+
+        env_cls = gym.vector.AsyncVectorEnv if use_async_envs else gym.vector.SyncVectorEnv
+        env = env_cls([lambda: single_env for _ in range(n_envs)])
+
+        return env
 
     package_name = f"gym_{cfg.type}"
 

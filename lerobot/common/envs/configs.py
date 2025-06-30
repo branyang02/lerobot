@@ -41,6 +41,39 @@ class EnvConfig(draccus.ChoiceRegistry, abc.ABC):
         raise NotImplementedError()
 
 
+# TODO(branyang02): allow configurable features and feature maps
+@EnvConfig.register_subclass("robosuite")
+@dataclass
+class RobosuiteEnvConfig(EnvConfig):
+    """Configuration for Robosuite environments."""
+
+    task: str = "Stack"
+    robot: str = "Panda"
+    fps: int = 20
+    features: dict[str, PolicyFeature] = field(
+        default_factory=lambda: {
+            "action": PolicyFeature(type=FeatureType.ACTION, shape=(7,)),
+            "observation.images.agentview_image": PolicyFeature(type=FeatureType.VISUAL, shape=(84, 84, 3)),
+            "observation.images.robot0_eye_in_hand_image": PolicyFeature(
+                type=FeatureType.VISUAL, shape=(84, 84, 3)
+            ),
+            "observation.state": PolicyFeature(type=FeatureType.STATE, shape=(9,)),
+        }
+    )
+    features_map: dict[str, str] = field(
+        default_factory=lambda: {
+            "action": ACTION,
+            "observation.images.agentview_image": f"{OBS_IMAGES}.agentview_image",
+            "observation.images.robot0_eye_in_hand_image": f"{OBS_IMAGES}.robot0_eye_in_hand_image",
+            "observation.state": OBS_STATE,
+        }
+    )
+
+    def gym_kwargs(self) -> dict:
+        # robosuite does not require any additional gym package
+        return {}
+
+
 @EnvConfig.register_subclass("aloha")
 @dataclass
 class AlohaEnv(EnvConfig):
