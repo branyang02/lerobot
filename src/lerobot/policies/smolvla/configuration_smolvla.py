@@ -106,6 +106,27 @@ class SmolVLAConfig(PreTrainedConfig):
     # Real-Time Chunking (RTC) configuration
     rtc_config: RTCConfig | None = None
 
+    # ==================== VAM (Video Action Model) Configuration ====================
+    # Set vam_hidden_dim to enable VAM cross-attention
+    vam_hidden_dim: int | None = None  # VAM output hidden dimension (e.g., 512). None = disabled.
+    vam_fusion_mode: str = "sigmoid_gate"  # How to fuse VLM and VAM: "sigmoid_gate", "softmax_gate", "mlp_fusion", "film"
+    vam_num_tokens: int = 64  # Number of output tokens from VAM
+    use_placeholder_vam: bool = True  # Use placeholder VAM for testing. Set False when using real VAM.
+
+    # ==================== Wan2.2-TI2V-5B VAM Configuration ====================
+    # Wan2.2 is a 5B parameter video generation model that can be used as a VAM backbone.
+    # When enabled, it replaces the placeholder VAM with the full Wan2.2 model.
+    # Model specs: 30 layers, 3072 hidden dim, 16×16×4 VAE compression
+    use_wan2_vam: bool = False  # Use Wan2.2-TI2V-5B as VAM (requires ~10GB VRAM in bf16)
+    wan2_model_id: str = "Wan-AI/Wan2.2-TI2V-5B-Diffusers"  # HuggingFace diffusers-compatible model ID
+    wan2_freeze: bool = False  # Freeze entire Wan2.2 backbone (False = fine-tune, True = frozen)
+    # Fine-grained freezing options (only used when wan2_freeze=False):
+    wan2_freeze_vae: bool = True  # Freeze VAE encoder (recommended - saves 700M params, VAE is for compression)
+    wan2_freeze_text_embedder: bool = True  # Freeze text/time embedder (recommended - we use dummy text)
+    wan2_trainable_layers: int = -1  # Number of transformer layers to train from the END. -1 = all layers
+                                      # e.g., 10 means train last 10 layers (20-29), freeze first 20 (0-19)
+                                      # This saves memory and speeds up training significantly
+
     def __post_init__(self):
         super().__post_init__()
 

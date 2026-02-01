@@ -567,6 +567,18 @@ class VLAFlowMatching(nn.Module):
             self_attn_every_n_layers=self.config.self_attn_every_n_layers,
             expert_width_multiplier=self.config.expert_width_multiplier,
             device=self.config.device if self.config.device is not None else "auto",
+            # VAM (Video Action Model) configuration
+            vam_hidden_dim=self.config.vam_hidden_dim,
+            vam_fusion_mode=self.config.vam_fusion_mode,
+            vam_num_tokens=self.config.vam_num_tokens,
+            use_placeholder_vam=self.config.use_placeholder_vam,
+            # Wan2.2-TI2V-5B VAM configuration
+            use_wan2_vam=self.config.use_wan2_vam,
+            wan2_model_id=self.config.wan2_model_id,
+            wan2_freeze=self.config.wan2_freeze,
+            wan2_freeze_vae=self.config.wan2_freeze_vae,
+            wan2_freeze_text_embedder=self.config.wan2_freeze_text_embedder,
+            wan2_trainable_layers=self.config.wan2_trainable_layers,
         )
         self.state_proj = nn.Linear(
             self.config.max_state_dim, self.vlm_with_expert.config.text_config.hidden_size
@@ -774,6 +786,12 @@ class VLAFlowMatching(nn.Module):
         pad_masks = torch.cat([prefix_pad_masks, suffix_pad_masks], dim=1)
         att_masks = torch.cat([prefix_att_masks, suffix_att_masks], dim=1)
 
+        # Stack raw images for Wan2.2 VAM if enabled
+        raw_images = None
+        if self.vlm_with_expert.use_wan2_vam:
+            # Stack images: list of [B, C, H, W] -> [B, num_cameras, C, H, W]
+            raw_images = torch.stack(images, dim=1)
+
         att_2d_masks = make_att_2d_masks(pad_masks, att_masks)
         position_ids = torch.cumsum(pad_masks, dim=1) - 1
         (_, suffix_out), _ = self.vlm_with_expert.forward(
@@ -783,6 +801,7 @@ class VLAFlowMatching(nn.Module):
             inputs_embeds=[prefix_embs, suffix_embs],
             use_cache=False,
             fill_kv_cache=False,
+            raw_images=raw_images,  # For Wan2.2 VAM
         )
         suffix_out = suffix_out[:, -self.config.chunk_size :]
         # Original openpi code, upcast attention output
@@ -814,6 +833,13 @@ class VLAFlowMatching(nn.Module):
         )
         prefix_att_2d_masks = make_att_2d_masks(prefix_pad_masks, prefix_att_masks)
         prefix_position_ids = torch.cumsum(prefix_pad_masks, dim=1) - 1
+
+        # Stack raw images for Wan2.2 VAM if enabled
+        raw_images = None
+        if self.vlm_with_expert.use_wan2_vam:
+            # Stack images: list of [B, C, H, W] -> [B, num_cameras, C, H, W]
+            raw_images = torch.stack(images, dim=1)
+
         # Compute image and language key value cache
         _, past_key_values = self.vlm_with_expert.forward(
             attention_mask=prefix_att_2d_masks,
@@ -822,6 +848,7 @@ class VLAFlowMatching(nn.Module):
             inputs_embeds=[prefix_embs, None],
             use_cache=self.config.use_cache,
             fill_kv_cache=True,
+            raw_images=raw_images,  # For Wan2.2 VAM (will cache the hidden states)
         )
         num_steps = self.config.num_steps
         dt = -1.0 / num_steps
